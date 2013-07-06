@@ -9,11 +9,14 @@ import Data.Bits
 data Octant     = NWU | NEU | SWU | SEU | NWD | NED | SWD | SED
                 deriving (Eq, Ord, Enum, Show)
 
-data Octree a   = Node  { nwu, neu
-                        , swu, seu
-                        , nwd, ned
-                        , swd, sed  :: !(Octree a)
-                        }
+data Octants a  = Octants   { nwu, neu
+                            , swu, seu
+                            , nwd, ned
+                            , swd, sed  :: !(Octree a)
+                            }
+                deriving (Eq, Show)
+
+data Octree a   = Node  (Octants a)
                 | Leaf  !a
                 | Empty
                 deriving (Eq, Show)
@@ -23,11 +26,7 @@ type Position = (Int, Int, Int)
 pathToPos :: Int -> Position -> [Octant]
 pathToPos 0 _         = []
 pathToPos h (x, y, z) =
-    let h' = h - 1
-        sigbit = flip testBit h'
-        (i, j, k)  = (sigbit x, sigbit y, sigbit z)
-        path' = pathToPos h' (x, y, z)
-    in case (i, j, k) of
+    case sigbits of
         (False, True , True )   -> NWU : path'
         (True , True , True )   -> NEU : path'
         (False, False, True )   -> SWU : path'
@@ -36,45 +35,50 @@ pathToPos h (x, y, z) =
         (True , True , False)   -> NED : path'
         (False, False, False)   -> SWD : path'
         (True , False, False)   -> SED : path'
+    where
+        sigbits = (sigbit x, sigbit y, sigbit z)
+        sigbit  = flip testBit h'
+        path'   = pathToPos h' (x, y, z)
+        h'      = h - 1
 
-expand :: Octree a -> Octree a
-expand Empty    = Node Empty Empty Empty Empty Empty Empty Empty Empty
-expand (Leaf v) = Node (Leaf v) (Leaf v) (Leaf v) (Leaf v) (Leaf v) (Leaf v) (Leaf v) (Leaf v)
-expand n        = n
+expand :: Octree a -> Octants a
+expand Empty    = Octants Empty Empty Empty Empty Empty Empty Empty Empty
+expand (Leaf v) = Octants (Leaf v) (Leaf v) (Leaf v) (Leaf v) (Leaf v) (Leaf v) (Leaf v) (Leaf v)
+expand (Node o) = o
 
-collapse :: Eq a => Octree a -> Octree a
-collapse (Node a b c d e f g h) | all (==a) [b,c,d,e,f,g,h] = a
-collapse n                                                  = n
-
-octant :: Octant -> Octree a -> Octree a
-octant NWU = nwu
-octant NEU = neu
-octant SWU = swu
-octant SEU = seu
-octant NWD = nwd
-octant NED = ned
-octant SWD = swd
-octant SED = sed
+collapse :: Eq a => Octants a -> Octree a
+collapse (Octants a b c d e f g h) | all (==a) [b,c,d,e,f,g,h] = a
+collapse o                                                     = Node o
 
 lookup :: Eq a => [Octant] -> Octree a -> Octree a
-lookup (o:os) n@Node{} = lookup os (octant o n)
+lookup (o:os) (Node ocs) =
+    let l o' = lookup os (o' ocs) in
+    case o of
+        NWU -> l nwu
+        NEU -> l neu
+        SWU -> l swu
+        SEU -> l seu
+        NWD -> l nwd
+        NED -> l ned
+        SWD -> l swd
+        SED -> l sed
 lookup _      ot       = ot
 
 modify :: Eq a => (Octree a -> Octree a) -> [Octant] -> Octree a -> Octree a
 modify f []     = f
 modify f (o:os) = collapse . modify' . expand
-    where   modify' n@Node{} =
-                let m = modify f os (octant o n) in
-                case o of
-                    NWU -> n { nwu = m }
-                    NEU -> n { neu = m }
-                    SWU -> n { swu = m }
-                    SEU -> n { seu = m }
-                    NWD -> n { nwd = m }
-                    NED -> n { ned = m }
-                    SWD -> n { swd = m }
-                    SED -> n { sed = m }
-            modify' _ = error "expand didn't return node"
+    where
+        modify' ocs =
+            let m o' = modify f os (o' ocs) in
+            case o of
+                NWU -> ocs { nwu = m nwu }
+                NEU -> ocs { neu = m neu }
+                SWU -> ocs { swu = m swu }
+                SEU -> ocs { seu = m seu }
+                NWD -> ocs { nwd = m nwd }
+                NED -> ocs { ned = m ned }
+                SWD -> ocs { swd = m swd }
+                SED -> ocs { sed = m sed }
 
 set :: Eq a => Octree a -> [Octant] -> Octree a -> Octree a
 set v = modify (const v)
