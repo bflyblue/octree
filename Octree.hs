@@ -6,13 +6,18 @@ module Octree where
 import Prelude hiding (lookup)
 import Data.Bits
 
-data Octant     = NWU | NEU | SWU | SEU | NWD | NED | SWD | SED
+--     3---7
+--    /|  /|
+--   2---6 |
+--   | 1-|-5
+--   |/  |/   Y Z
+--   0---4    |/_X
+
+data Octant     = O0 | O1 | O2 | O3 | O4 | O5 | O6 | O7
                 deriving (Eq, Ord, Enum, Show)
 
-data Octants a  = Octants   { nwu, neu
-                            , swu, seu
-                            , nwd, ned
-                            , swd, sed  :: !(Octree a)
+data Octants a  = Octants   { oct0, oct1, oct2, oct3
+                            , oct4, oct5, oct6, oct7 :: !(Octree a)
                             }
                 deriving (Eq, Show)
 
@@ -26,20 +31,19 @@ type Position = (Int, Int, Int)
 pathToPos :: Int -> Position -> [Octant]
 pathToPos 0 _         = []
 pathToPos h (x, y, z) =
-    case sigbits of
-        (False, True , True )   -> NWU : path'
-        (True , True , True )   -> NEU : path'
-        (False, False, True )   -> SWU : path'
-        (True , False, True )   -> SEU : path'
-        (False, True , False)   -> NWD : path'
-        (True , True , False)   -> NED : path'
-        (False, False, False)   -> SWD : path'
-        (True , False, False)   -> SED : path'
+    let subnode = case label of 0 -> O0
+                                1 -> O1
+                                2 -> O2
+                                3 -> O3
+                                4 -> O4
+                                5 -> O5
+                                6 -> O6
+                                7 -> O7
+    in subnode : pathToPos h' (x, y, z)
     where
-        sigbits = (sigbit x, sigbit y, sigbit z)
-        sigbit  = flip testBit h'
-        path'   = pathToPos h' (x, y, z)
-        h'      = h - 1
+        label       = bit' x 4 .|. bit' y 2 .|. bit' z 1
+        bit' a b    = if testBit a h' then b else 0 :: Int
+        h'          = h - 1
 
 expand :: Octree a -> Octants a
 expand Empty    = Octants Empty Empty Empty Empty Empty Empty Empty Empty
@@ -54,14 +58,14 @@ lookup :: Eq a => [Octant] -> Octree a -> Octree a
 lookup (o:os) (Node ocs) =
     let l o' = lookup os (o' ocs) in
     case o of
-        NWU -> l nwu
-        NEU -> l neu
-        SWU -> l swu
-        SEU -> l seu
-        NWD -> l nwd
-        NED -> l ned
-        SWD -> l swd
-        SED -> l sed
+        O0 -> l oct0
+        O1 -> l oct1
+        O2 -> l oct2
+        O3 -> l oct3
+        O4 -> l oct4
+        O5 -> l oct5
+        O6 -> l oct6
+        O7 -> l oct7
 lookup _      ot       = ot
 
 modify :: Eq a => (Octree a -> Octree a) -> [Octant] -> Octree a -> Octree a
@@ -71,14 +75,14 @@ modify f (o:os) = collapse . modify' . expand
         modify' ocs =
             let m o' = modify f os (o' ocs) in
             case o of
-                NWU -> ocs { nwu = m nwu }
-                NEU -> ocs { neu = m neu }
-                SWU -> ocs { swu = m swu }
-                SEU -> ocs { seu = m seu }
-                NWD -> ocs { nwd = m nwd }
-                NED -> ocs { ned = m ned }
-                SWD -> ocs { swd = m swd }
-                SED -> ocs { sed = m sed }
+                O0 -> ocs { oct0 = m oct0 }
+                O1 -> ocs { oct1 = m oct1 }
+                O2 -> ocs { oct2 = m oct2 }
+                O3 -> ocs { oct3 = m oct3 }
+                O4 -> ocs { oct4 = m oct4 }
+                O5 -> ocs { oct5 = m oct5 }
+                O6 -> ocs { oct6 = m oct6 }
+                O7 -> ocs { oct7 = m oct7 }
 
 set :: Eq a => Octree a -> [Octant] -> Octree a -> Octree a
 set v = modify (const v)
