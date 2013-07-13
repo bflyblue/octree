@@ -84,6 +84,9 @@ modify f (o:os) = collapse . modify' . expand
                 O6 -> ocs { oct6 = m oct6 }
                 O7 -> ocs { oct7 = m oct7 }
 
+empty :: Octree a
+empty = Empty
+
 set :: Eq a => Octree a -> [Octant] -> Octree a -> Octree a
 set v = modify (const v)
 
