@@ -71,9 +71,10 @@ expand octree                                       = octree
 
 collapse :: Eq a => Octree a -> Octree a
 collapse (Node h o0 o1 o2 o3 o4 o5 o6 o7)
-    | all (==o0) [o1,o2,o3,o4,o5,o6,o7]             = case o0 of Leaf _ v                       -> Leaf h v
-                                                                 Empty _                        -> Empty h
-                                                                 Node _ n1 n2 n3 n4 n5 n6 n7 n8 -> Node h n1 n2 n3 n4 n5 n6 n7 n8
+    | all (==o0) [o1,o2,o3,o4,o5,o6,o7]             = case o0 of Node _ n1 n2 n3 n4 n5 n6 n7 n8
+                                                                            -> Node h n1 n2 n3 n4 n5 n6 n7 n8
+                                                                 Leaf _ v   -> Leaf h v
+                                                                 Empty _    -> Empty h
 collapse octree                                     = octree
 
 lookup :: Eq a => Position -> Octree a -> Maybe a
@@ -87,8 +88,8 @@ lookup pos (Node h o0 o1 o2 o3 o4 o5 o6 o7)         = case step h pos of Nothing
                                                                          Just O6 -> l o6
                                                                          Just O7 -> l o7
     where l                                         = lookup pos
-lookup _   Empty{}                                  = Nothing
 lookup _   (Leaf _ val)                             = Just val
+lookup _   Empty{}                                  = Nothing
 
 lookupDefault :: Eq a => a -> Position -> Octree a -> a
 lookupDefault defval pos octree                     = fromMaybe defval (lookup pos octree)
@@ -130,9 +131,11 @@ walk f octree                                       = walk' (initDim octree) oct
         walk' dim octree'                           = case octree' of
                                                           Empty{} -> f octree' dim
                                                           Leaf{}  -> f octree' dim
-                                                          Node 0 _  _  _  _  _  _  _  _  -> error "node at level 0?"
-                                                          Node _ n0 n1 n2 n3 n4 n5 n6 n7 -> f octree dim ++ w O0 n0 ++ w O1 n1 ++ w O2 n2 ++ w O3 n3
-                                                                                                         ++ w O4 n4 ++ w O5 n5 ++ w O6 n6 ++ w O7 n7
+                                                          Node 0 _  _  _  _  _  _  _  _
+                                                                -> error "node at level 0?"
+                                                          Node _ n0 n1 n2 n3 n4 n5 n6 n7
+                                                                -> f octree dim ++ w O0 n0 ++ w O1 n1 ++ w O2 n2 ++ w O3 n3
+                                                                                ++ w O4 n4 ++ w O5 n5 ++ w O6 n6 ++ w O7 n7
             where
                 w o                                 = walk' (subdivide dim o)
 
@@ -154,7 +157,8 @@ fill' (x,y,z) (x',y',z') dim@(i,j,k,h) val octree
     where
         f o                                         = fill' (x,y,z) (x', y', z') (subdivide dim o) val
         Node _ o0 o1 o2 o3 o4 o5 o6 o7              = expand octree
-        node'                                       = Node h (f O0 o0) (f O1 o1) (f O2 o2) (f O3 o3) (f O4 o4) (f O5 o5) (f O6 o6) (f O7 o7)
+        node'                                       = Node h (f O0 o0) (f O1 o1) (f O2 o2) (f O3 o3)
+                                                             (f O4 o4) (f O5 o5) (f O6 o6) (f O7 o7)
         (i',j',k')                                  = (i + d, j + d, k + d)
         d                                           = bit h - 1
 
