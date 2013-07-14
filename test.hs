@@ -3,7 +3,7 @@ import Test.QuickCheck
 import Octree
 
 import Data.Bits
-import Data.List (sort)
+import Data.List (sort, foldl')
 import qualified Data.Map as M
 import System.Random
 
@@ -80,18 +80,25 @@ prop_sum :: Property
 prop_sum = forAll (rect 8) $ \(p1, p2) ->
     let ot = fill p1 p2 1 (Leaf 8 0)
     in
+        sum [lookupDefault 0 (x,y,z) ot | let r = [0..255], x <- r, y <- r, z <- r] == area p1 p2
+
+prop_folddim :: Property
+prop_folddim = forAll (rect 8) $ \(p1, p2) ->
+    let ot = fill p1 p2 1 (Leaf 8 0)
+    in
         -- sum [lookupDefault 0 (x,y,z) ot | let r = [0..255], x <- r, y <- r, z <- r] == area p1 p2
-        sum (values ot) == area p1 p2
+        foldl' (\z ((_,_,_,h),v) -> z + v * ((bit h)^3)) 0 (toDim ot) == area p1 p2
 
 main :: IO ()
 main = do
     let gen = mkStdGen 1
     let lots = stdArgs { maxSuccess = 10000 }
-        replay = stdArgs { replay = Just (gen, 123), maxSuccess = 5 }
+        replay = stdArgs { replay = Just (gen, 123), maxSuccess = 100 }
         few  = stdArgs { maxSuccess = 10 }
-    -- quickCheck prop_insert_notempty
-    -- quickCheck prop_insert_distinct
-    -- quickCheckWith lots prop_collapse
-    -- quickCheck prop_expandcollapse
-    -- quickCheckWith lots prop_identity
-    quickCheckWith replay prop_sum
+    quickCheck prop_insert_notempty
+    quickCheck prop_insert_distinct
+    quickCheckWith lots prop_collapse
+    quickCheck prop_expandcollapse
+    quickCheckWith lots prop_identity
+    quickCheckWith few prop_sum
+    quickCheck prop_folddim
