@@ -16,77 +16,84 @@ import Data.Bits
 data Octant     = O0 | O1 | O2 | O3 | O4 | O5 | O6 | O7
                 deriving (Eq, Ord, Enum, Show)
 
-data Octree a   = Node  { oct0, oct1, oct2, oct3, oct4, oct5, oct6, oct7 :: !(Octree a) }
+data OctNode a  = Node  { oct0, oct1, oct2, oct3, oct4, oct5, oct6, oct7 :: !(Octree a) }
                 | Leaf  !a
                 | Empty
                 deriving (Eq, Show)
 
+data Octree a   = Octree !Int (OctNode a)
+                deriving (Eq, Show)
+
 type Position   = (Int, Int, Int)
 
-pathToPos :: Int -> Position -> [Octant]
-pathToPos 0 _         = []
-pathToPos h (x, y, z) =
-    let subnode = case label of 0 -> O0
-                                1 -> O1
-                                2 -> O2
-                                3 -> O3
-                                4 -> O4
-                                5 -> O5
-                                6 -> O6
-                                7 -> O7
-    in subnode : pathToPos h' (x, y, z)
+step :: Int -> Position -> Maybe Octant
+step 0 _                                            = Nothing
+step h (x, y, z)                                    = Just $ case label of 0 -> O0
+                                                                           1 -> O1
+                                                                           2 -> O2
+                                                                           3 -> O3
+                                                                           4 -> O4
+                                                                           5 -> O5
+                                                                           6 -> O6
+                                                                           7 -> O7
     where
-        label       = bit' x 4 .|. bit' y 2 .|. bit' z 1
-        bit' a b    = if testBit a h' then b else 0 :: Int
-        h'          = h - 1
+        label                                       = bit' x 4 .|. bit' y 2 .|. bit' z 1
+        bit' a b                                    = if testBit a h' then b else 0 :: Int
+        h'                                          = h - 1
 
 expand :: Octree a -> Octree a
-expand Empty                            = Node Empty Empty Empty Empty Empty Empty Empty Empty
-expand (Leaf v)                         = Node (Leaf v) (Leaf v) (Leaf v) (Leaf v) (Leaf v) (Leaf v) (Leaf v) (Leaf v)
-expand node                             = node
+expand (Octree h node)                              = Octree h $ case node of
+                                                                     Empty  -> e Empty
+                                                                     Leaf v -> e (Leaf v)
+                                                                     _      -> node
+    where
+        e n                                         = Node o o o o o o o o
+            where
+                o                                   = Octree (h - 1) n
 
 collapse :: Eq a => Octree a -> Octree a
-collapse (Node a b c d e f g h)
-        | all (==a) [b,c,d,e,f,g,h]     = a
-collapse node                           = node
+collapse (Octree h (Node o0 o1 o2 o3 o4 o5 o6 o7))
+    | all (==o0) [o1,o2,o3,o4,o5,o6,o7]             = let (Octree _ node) = o0 in Octree h node
+collapse octree                                     = octree
 
-lookup :: Eq a => [Octant] -> Octree a -> Octree a
-lookup (o:os) node@Node{}               = let l o' = lookup os (o' node) in
-                                          case o of O0 -> l oct0
-                                                    O1 -> l oct1
-                                                    O2 -> l oct2
-                                                    O3 -> l oct3
-                                                    O4 -> l oct4
-                                                    O5 -> l oct5
-                                                    O6 -> l oct6
-                                                    O7 -> l oct7
-lookup _      ot                        = ot
+lookup :: Eq a => Position -> Octree a -> Octree a
+lookup pos octree@(Octree h (Node o0 o1 o2 o3 o4 o5 o6 o7))
+                                                    = case step h pos of Nothing -> octree
+                                                                         Just O0 -> l o0
+                                                                         Just O1 -> l o1
+                                                                         Just O2 -> l o2
+                                                                         Just O3 -> l o3
+                                                                         Just O4 -> l o4
+                                                                         Just O5 -> l o5
+                                                                         Just O6 -> l o6
+                                                                         Just O7 -> l o7
+    where l                                         = lookup pos
 
-modify :: Eq a => (Octree a -> Octree a) -> [Octant] -> Octree a -> Octree a
-modify f []                             = f
-modify f (o:os)                         = collapse . modify' . expand
+modify :: Eq a => (Octree a -> Octree a) -> Position -> Octree a -> Octree a
+modify f pos                                        = collapse . modify' . expand
     where
-        modify' node                    = let m o' = modify f os (o' node) in
-                                          case o of O0 -> node { oct0 = m oct0 }
-                                                    O1 -> node { oct1 = m oct1 }
-                                                    O2 -> node { oct2 = m oct2 }
-                                                    O3 -> node { oct3 = m oct3 }
-                                                    O4 -> node { oct4 = m oct4 }
-                                                    O5 -> node { oct5 = m oct5 }
-                                                    O6 -> node { oct6 = m oct6 }
-                                                    O7 -> node { oct7 = m oct7 }
+        modify' octree@(Octree h node@Node{})       = case step h pos of Nothing -> f octree
+                                                                         Just O0 -> m oct0 (\o x->o {oct0=x})
+                                                                         Just O1 -> m oct1 (\o x->o {oct1=x})
+                                                                         Just O2 -> m oct2 (\o x->o {oct2=x})
+                                                                         Just O3 -> m oct3 (\o x->o {oct3=x})
+                                                                         Just O4 -> m oct4 (\o x->o {oct4=x})
+                                                                         Just O5 -> m oct5 (\o x->o {oct5=x})
+                                                                         Just O6 -> m oct6 (\o x->o {oct6=x})
+                                                                         Just O7 -> m oct7 (\o x->o {oct7=x})
+            where m g s                             = Octree h . s node . modify f pos . g $ node
 
-empty :: Octree a
-empty = Empty
+empty :: Int -> Octree a
+empty h = Octree h Empty
 
-set :: Eq a => Octree a -> [Octant] -> Octree a -> Octree a
-set v = modify (const v)
+set :: Eq a => Position -> Octree a -> Octree a -> Octree a
+set pos octree = modify (const octree) pos
 
-insert :: Eq a => a -> [Octant] -> Octree a -> Octree a
-insert = set . Leaf
+insert :: Eq a => Position -> a -> Octree a -> Octree a
+insert pos val = set pos (Octree 0 (Leaf val))
 
-delete :: Eq a => [Octant] -> Octree a -> Octree a
-delete = set Empty
+delete :: Eq a => Position -> Octree a -> Octree a
+delete pos = set pos (Octree 0 Empty)
 
 -- toList :: Octree a -> [a]
 -- toList Empty = []
