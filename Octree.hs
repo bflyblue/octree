@@ -117,8 +117,11 @@ insert pos val = set pos (Leaf 0 val)
 delete :: Eq a => Position -> Octree a -> Octree a
 delete pos = set pos (Empty 0)
 
+initDim :: Octree a -> Dimensions
+initDim octree = (0, 0, 0, height octree)
+
 walk :: Eq a => (Octree a -> Dimensions -> [b]) -> Octree a -> [b]
-walk f octree = walk' (0, 0, 0, height octree) octree
+walk f octree = walk' (initDim octree) octree
     where
         walk' dim octree' =
             case octree' of
@@ -129,6 +132,29 @@ walk f octree = walk' (0, 0, 0, height octree) octree
                     f octree dim ++ w O0 n0 ++ w O1 n1 ++ w O2 n2 ++ w O3 n3 ++ w O4 n4 ++ w O5 n5 ++ w O6 n6 ++ w O7 n7
             where
                 w o     = walk' (subdivide dim o)
+
+fill :: Eq a => Position -> Position -> a -> Octree a -> Octree a
+fill (x,y,z) (x',y',z') val octree =
+    let order a a' = (min a a', max a a')
+        (i,i') = order x x'
+        (j,j') = order y y'
+        (k,k') = order z z'
+    in
+        fill' (i,j,k) (i',j',k') (initDim octree) val octree
+
+fill' :: Eq a => Position -> Position -> Dimensions -> a -> Octree a -> Octree a
+fill' _       _              (_,_,_,0) val _                        = Leaf 0 val
+fill' (x,y,z) (x',y',z') dim@(i,j,k,h) val octree
+    | x' < i || y' < j || z' < k ||
+      x >= i' || y >= j' || z >= k'     = octree
+    | x <= i && y <= j && z <= k &&
+      x' > i' && y' > j' && z' > k'     = Leaf h val
+    | otherwise                         = Node h (f O0 o0) (f O1 o1) (f O2 o2) (f O3 o3) (f O4 o4) (f O5 o5) (f O6 o6) (f O7 o7)
+    where
+        f o                             = fill' (x,y,z) (x', y', z') (subdivide dim o) val
+        Node _ o0 o1 o2 o3 o4 o5 o6 o7  = expand octree
+        (i',j',k')                      = (i + d, j + d, k + d)
+        d                               = bit (h - 1)
 
 toList :: Eq a => Octree a -> [(Position, a)]
 toList = walk l'
