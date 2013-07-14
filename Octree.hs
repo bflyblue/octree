@@ -116,22 +116,17 @@ delete :: Eq a => Position -> Octree a -> Octree a
 delete pos = set pos (Empty 0)
 
 walk :: Eq a => (Octree a -> Dimensions -> [b]) -> Octree a -> [b]
-walk f octree = walk' (0, 0, 0, height octree) f octree
-
-walk' :: Eq a => Dimensions -> (Octree a -> Dimensions -> [b]) -> Octree a -> [b]
-walk' dim f octree =
-    case octree of
-        Empty{} -> f octree dim
-        Leaf{}  -> f octree dim
-        Node _ n0 n1 n2 n3 n4 n5 n6 n7 ->
-            f octree dim ++ w O0 n0 ++ w O1 n1 ++ w O2 n2 ++ w O3 n3 ++ w O4 n4 ++ w O5 n5 ++ w O6 n6 ++ w O7 n7
+walk f octree = walk' (0, 0, 0, height octree) octree
     where
-        w o     = walk' (subdivide dim o) f
+        walk' dim octree' =
+            case octree of
+                Empty{} -> f octree' dim
+                Leaf{}  -> f octree' dim
+                Node _ n0 n1 n2 n3 n4 n5 n6 n7 ->
+                    f octree dim ++ w O0 n0 ++ w O1 n1 ++ w O2 n2 ++ w O3 n3 ++ w O4 n4 ++ w O5 n5 ++ w O6 n6 ++ w O7 n7
+            where
+                w o     = walk' (subdivide dim o)
 
--- toList :: Octree a -> [a]
--- toList Empty = []
--- toList (Leaf a) = [a]
--- toList (Node (Octants a b c d e f g h)) = concatMap toList [a,b,c,d,e,f,g,h]
 toList :: (Eq a) => Octree a -> [(Position, a)]
 toList = walk l'
     where l' (Leaf _ v) (x,y,z,h)   = [((x+i, y+j, z+k), v) | let r = [0..(bit h - 1)], i <- r, j <- r, k <- r]
