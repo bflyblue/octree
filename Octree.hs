@@ -5,6 +5,7 @@ module Octree where
 
 import Prelude hiding (lookup)
 import Data.Bits
+import Data.List (foldl')
 
 --     3---7
 --    /|  /|
@@ -47,6 +48,7 @@ step h (x, y, z)                                    = Just $ case label of 0 -> 
         h'                                          = h - 1
 
 subdivide :: Dimensions -> Octant -> Dimensions
+subdivide (_, _, _, 0) _      = error "cannot subdivide level 0 node"
 subdivide (x, y, z, h) octant =
     let h' = h - 1
         xm = x .|. bit h'
@@ -101,7 +103,7 @@ modify f pos                                        = collapse . modify' . expan
                                                                          Just O6 -> m o6 (\o x->o {oct6=x})
                                                                          Just O7 -> m o7 (\o x->o {oct7=x})
             where m n s                             = s octree . modify f pos $ n
-        modify' _                                   = error "expand did not return a Node"
+        modify' _                                   = error "expand did not return a node"
 
 empty :: Int -> Octree a
 empty = Empty
@@ -119,15 +121,19 @@ walk :: Eq a => (Octree a -> Dimensions -> [b]) -> Octree a -> [b]
 walk f octree = walk' (0, 0, 0, height octree) octree
     where
         walk' dim octree' =
-            case octree of
+            case octree' of
                 Empty{} -> f octree' dim
                 Leaf{}  -> f octree' dim
+                Node 0 _  _  _  _  _  _  _  _  -> error "node at level 0?"
                 Node _ n0 n1 n2 n3 n4 n5 n6 n7 ->
                     f octree dim ++ w O0 n0 ++ w O1 n1 ++ w O2 n2 ++ w O3 n3 ++ w O4 n4 ++ w O5 n5 ++ w O6 n6 ++ w O7 n7
             where
                 w o     = walk' (subdivide dim o)
 
-toList :: (Eq a) => Octree a -> [(Position, a)]
+toList :: Eq a => Octree a -> [(Position, a)]
 toList = walk l'
     where l' (Leaf _ v) (x,y,z,h)   = [((x+i, y+j, z+k), v) | let r = [0..(bit h - 1)], i <- r, j <- r, k <- r]
           l' _   _                  = []
+
+fromList :: Eq a => Int -> [(Position, a)] -> Octree a
+fromList h = foldl' (\o (p,v) -> insert p v o) (empty h)

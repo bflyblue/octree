@@ -2,7 +2,10 @@ import Test.QuickCheck
 
 import Octree
 
-octantPositions :: [(Int,Int,Int)]
+import Data.List (sort)
+import qualified Data.Map as M
+
+octantPositions :: [Position]
 octantPositions = [(0,0,0),(0,0,1),(0,1,0),(0,1,1),(1,0,0),(1,0,1),(1,1,0),(1,1,1)]
 
 heights :: Gen Int
@@ -10,6 +13,19 @@ heights = choose (1, 8)
 
 leaves :: Gen Char
 leaves = choose ('a', 'b')
+
+position4 :: Gen Position
+position4 = do
+    x <- choose (0, 15)
+    y <- choose (0, 15)
+    z <- choose (0, 15)
+    return (x,y,z)
+
+data4 :: Gen (Position, Char)
+data4 = do
+    p <- position4
+    v <- choose('a', 'd')
+    return (p, v)
 
 -- something gets inserted
 prop_insert_notempty :: Char -> Int -> Int -> Int -> Property
@@ -41,9 +57,18 @@ prop_expandcollapse = forAll (vectorOf 2 leaves) $ \ls ->
     in
         (all (== Leaf 1 l1) o) == (l1 == l2)
 
+(@==) :: Ord a => [a] -> [a] -> Bool
+a @== b = sort a == sort b
+
+prop_identity :: Property
+prop_identity = forAll (listOf data4) $ \ds ->
+    (toList . fromList 4 $ ds) @== (M.toList . M.fromList $ ds)
+
 main :: IO ()
 main = do
+    let lots = stdArgs { maxSuccess = 10000 }
     quickCheck prop_insert_notempty
     quickCheck prop_insert_distinct
-    quickCheckWith stdArgs { maxSuccess = 1000 } prop_collapse
+    quickCheckWith lots prop_collapse
     quickCheck prop_expandcollapse
+    quickCheckWith lots prop_identity
