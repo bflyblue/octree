@@ -49,21 +49,20 @@ step h (x, y, z)                                    = Just $ case label of 0 -> 
         h'                                          = h - 1
 
 subdivide :: Dimensions -> Octant -> Dimensions
-subdivide (_, _, _, 0) _      = error "cannot subdivide level 0 node"
-subdivide (x, y, z, h) octant =
-    let h' = h - 1
-        xm = x .|. bit h'
-        ym = y .|. bit h'
-        zm = z .|. bit h'
-    in
-        case octant of O0 -> (x , y , z , h')
-                       O1 -> (x , y , zm, h')
-                       O2 -> (x , ym, z , h')
-                       O3 -> (x , ym, zm, h')
-                       O4 -> (xm, y , z , h')
-                       O5 -> (xm, y , zm, h')
-                       O6 -> (xm, ym, z , h')
-                       O7 -> (xm, ym, zm, h')
+subdivide (_, _, _, 0) _                            = error "cannot subdivide level 0 node"
+subdivide (x, y, z, h) octant                       = let h' = h - 1
+                                                          xm = x .|. bit h'
+                                                          ym = y .|. bit h'
+                                                          zm = z .|. bit h'
+                                                      in
+                                                          case octant of O0 -> (x , y , z , h')
+                                                                         O1 -> (x , y , zm, h')
+                                                                         O2 -> (x , ym, z , h')
+                                                                         O3 -> (x , ym, zm, h')
+                                                                         O4 -> (xm, y , z , h')
+                                                                         O5 -> (xm, y , zm, h')
+                                                                         O6 -> (xm, ym, z , h')
+                                                                         O7 -> (xm, ym, zm, h')
 
 expand :: Octree a -> Octree a
 expand (Empty h)                                    = Node h e e e e e e e e where e = Empty (h - 1)
@@ -126,55 +125,53 @@ initDim :: Octree a -> Dimensions
 initDim octree = (0, 0, 0, height octree)
 
 walk :: Eq a => (Octree a -> Dimensions -> [b]) -> Octree a -> [b]
-walk f octree = walk' (initDim octree) octree
+walk f octree                                       = walk' (initDim octree) octree
     where
-        walk' dim octree' =
-            case octree' of
-                Empty{} -> f octree' dim
-                Leaf{}  -> f octree' dim
-                Node 0 _  _  _  _  _  _  _  _  -> error "node at level 0?"
-                Node _ n0 n1 n2 n3 n4 n5 n6 n7 ->
-                    f octree dim ++ w O0 n0 ++ w O1 n1 ++ w O2 n2 ++ w O3 n3 ++ w O4 n4 ++ w O5 n5 ++ w O6 n6 ++ w O7 n7
+        walk' dim octree'                           = case octree' of
+                                                          Empty{} -> f octree' dim
+                                                          Leaf{}  -> f octree' dim
+                                                          Node 0 _  _  _  _  _  _  _  _  -> error "node at level 0?"
+                                                          Node _ n0 n1 n2 n3 n4 n5 n6 n7 -> f octree dim ++ w O0 n0 ++ w O1 n1 ++ w O2 n2 ++ w O3 n3
+                                                                                                         ++ w O4 n4 ++ w O5 n5 ++ w O6 n6 ++ w O7 n7
             where
-                w o     = walk' (subdivide dim o)
+                w o                                 = walk' (subdivide dim o)
 
 fill :: Eq a => Position -> Position -> a -> Octree a -> Octree a
-fill (x,y,z) (x',y',z') val octree =
-    let order a a' = (min a a', max a a')
-        (i,i') = order x x'
-        (j,j') = order y y'
-        (k,k') = order z z'
-    in
-        fill' (i,j,k) (i',j',k') (initDim octree) val octree
+fill (x,y,z) (x',y',z') val octree                  = let order a a' = (min a a', max a a')
+                                                          (i,i') = order x x'
+                                                          (j,j') = order y y'
+                                                          (k,k') = order z z'
+                                                      in
+                                                          fill' (i,j,k) (i',j',k') (initDim octree) val octree
 
 fill' :: Eq a => Position -> Position -> Dimensions -> a -> Octree a -> Octree a
 fill' (x,y,z) (x',y',z') dim@(i,j,k,h) val octree
     | x' < i || y' < j || z' < k ||
-      x > i' || y > j' || z > k'        = octree
+      x > i' || y > j' || z > k'                    = octree
     | x <= i && y <= j && z <= k &&
-      x' >= i' && y' >= j' && z' >= k'  = Leaf h val
-    | otherwise                         = collapse node'
+      x' >= i' && y' >= j' && z' >= k'              = Leaf h val
+    | otherwise                                     = collapse node'
     where
-        f o                             = fill' (x,y,z) (x', y', z') (subdivide dim o) val
-        Node _ o0 o1 o2 o3 o4 o5 o6 o7  = expand octree
-        node'                           = Node h (f O0 o0) (f O1 o1) (f O2 o2) (f O3 o3) (f O4 o4) (f O5 o5) (f O6 o6) (f O7 o7)
-        (i',j',k')                      = (i + d, j + d, k + d)
-        d                               = bit h - 1
+        f o                                         = fill' (x,y,z) (x', y', z') (subdivide dim o) val
+        Node _ o0 o1 o2 o3 o4 o5 o6 o7              = expand octree
+        node'                                       = Node h (f O0 o0) (f O1 o1) (f O2 o2) (f O3 o3) (f O4 o4) (f O5 o5) (f O6 o6) (f O7 o7)
+        (i',j',k')                                  = (i + d, j + d, k + d)
+        d                                           = bit h - 1
+
+fromList :: Eq a => Int -> [(Position, a)] -> Octree a
+fromList h                                          = foldl' (\o (p,v) -> insert p v o) (empty h)
 
 toList :: Eq a => Octree a -> [(Position, a)]
-toList = walk l'
-    where l' (Leaf _ v) (x,y,z,h)   = [((x+i, y+j, z+k), v) | let r = [0..bit h-1], i <- r, j <- r, k <- r]
-          l' _   _                  = []
+toList                                              = walk l'
+    where l' (Leaf _ v) (x,y,z,h)                   = [((x+i, y+j, z+k), v) | let r = [0..bit h-1], i <- r, j <- r, k <- r]
+          l' _   _                                  = []
 
 toDim :: Eq a => Octree a -> [(Dimensions, a)]
-toDim = walk l'
-    where l' (Leaf _ v) (x,y,z,h)   = [((x,y,z,h), v)]
-          l' _   _                  = []
+toDim                                               = walk l'
+    where l' (Leaf _ v) (x,y,z,h)                   = [((x,y,z,h), v)]
+          l' _   _                                  = []
 
 values :: Eq a => Octree a -> [a]
 values = walk l'
-    where l' (Leaf _ v) (_,_,_,h)   = replicate ((bit h::Int)^(3::Int)) v
-          l' _   _                  = []
-
-fromList :: Eq a => Int -> [(Position, a)] -> Octree a
-fromList h = foldl' (\o (p,v) -> insert p v o) (empty h)
+    where l' (Leaf _ v) (_,_,_,h)                   = replicate ((bit h::Int)^(3::Int)) v
+          l' _   _                                  = []
