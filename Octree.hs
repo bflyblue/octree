@@ -6,6 +6,7 @@ module Octree where
 import Prelude hiding (lookup)
 import Data.Bits
 import Data.List (foldl')
+import Data.Maybe (fromMaybe)
 
 --     3---7
 --    /|  /|
@@ -76,8 +77,8 @@ collapse (Node h o0 o1 o2 o3 o4 o5 o6 o7)
                                                                  Node _ n1 n2 n3 n4 n5 n6 n7 n8 -> Node h n1 n2 n3 n4 n5 n6 n7 n8
 collapse octree                                     = octree
 
-lookup :: Eq a => Position -> Octree a -> Octree a
-lookup pos octree@(Node h o0 o1 o2 o3 o4 o5 o6 o7)  = case step h pos of Nothing -> octree
+lookup :: Eq a => Position -> Octree a -> Maybe a
+lookup pos (Node h o0 o1 o2 o3 o4 o5 o6 o7)         = case step h pos of Nothing -> Nothing
                                                                          Just O0 -> l o0
                                                                          Just O1 -> l o1
                                                                          Just O2 -> l o2
@@ -87,7 +88,11 @@ lookup pos octree@(Node h o0 o1 o2 o3 o4 o5 o6 o7)  = case step h pos of Nothing
                                                                          Just O6 -> l o6
                                                                          Just O7 -> l o7
     where l                                         = lookup pos
-lookup _   octree                                   = octree
+lookup _   Empty{}                                  = Nothing
+lookup _   (Leaf _ val)                             = Just val
+
+lookupDefault :: Eq a => a -> Position -> Octree a -> a
+lookupDefault defval pos octree                     = fromMaybe defval (lookup pos octree)
 
 modify :: Eq a => (Octree a -> Octree a) -> Position -> Octree a -> Octree a
 modify f pos                                        = collapse . modify' . expand
@@ -143,22 +148,27 @@ fill (x,y,z) (x',y',z') val octree =
         fill' (i,j,k) (i',j',k') (initDim octree) val octree
 
 fill' :: Eq a => Position -> Position -> Dimensions -> a -> Octree a -> Octree a
-fill' _       _              (_,_,_,0) val _                        = Leaf 0 val
 fill' (x,y,z) (x',y',z') dim@(i,j,k,h) val octree
     | x' < i || y' < j || z' < k ||
-      x >= i' || y >= j' || z >= k'     = octree
+      x > i' || y > j' || z > k'        = octree
     | x <= i && y <= j && z <= k &&
-      x' > i' && y' > j' && z' > k'     = Leaf h val
-    | otherwise                         = Node h (f O0 o0) (f O1 o1) (f O2 o2) (f O3 o3) (f O4 o4) (f O5 o5) (f O6 o6) (f O7 o7)
+      x' >= i' && y' >= j' && z' >= k'  = Leaf h val
+    | otherwise                         = collapse node'
     where
         f o                             = fill' (x,y,z) (x', y', z') (subdivide dim o) val
         Node _ o0 o1 o2 o3 o4 o5 o6 o7  = expand octree
+        node'                           = Node h (f O0 o0) (f O1 o1) (f O2 o2) (f O3 o3) (f O4 o4) (f O5 o5) (f O6 o6) (f O7 o7)
         (i',j',k')                      = (i + d, j + d, k + d)
-        d                               = bit (h - 1)
+        d                               = bit h - 1
 
 toList :: Eq a => Octree a -> [(Position, a)]
 toList = walk l'
-    where l' (Leaf _ v) (x,y,z,h)   = [((x+i, y+j, z+k), v) | let r = [0..(bit h - 1)], i <- r, j <- r, k <- r]
+    where l' (Leaf _ v) (x,y,z,h)   = [((x+i, y+j, z+k), v) | let r = [0..bit h-1], i <- r, j <- r, k <- r]
+          l' _   _                  = []
+
+toDim :: Eq a => Octree a -> [(Dimensions, a)]
+toDim = walk l'
+    where l' (Leaf _ v) (x,y,z,h)   = [((x,y,z,h), v)]
           l' _   _                  = []
 
 fromList :: Eq a => Int -> [(Position, a)] -> Octree a

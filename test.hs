@@ -2,8 +2,10 @@ import Test.QuickCheck
 
 import Octree
 
+import Data.Bits
 import Data.List (sort)
 import qualified Data.Map as M
+import System.Random
 
 octantPositions :: [Position]
 octantPositions = [(0,0,0),(0,0,1),(0,1,0),(0,1,1),(1,0,0),(1,0,1),(1,1,0),(1,1,1)]
@@ -14,17 +16,23 @@ heights = choose (1, 8)
 leaves :: Gen Char
 leaves = choose ('a', 'b')
 
-position4 :: Gen Position
-position4 = do
-    x <- choose (0, 15)
-    y <- choose (0, 15)
-    z <- choose (0, 15)
+position :: Int -> Gen Position
+position n = do
+    x <- choose (0, bit n - 1)
+    y <- choose (0, bit n - 1)
+    z <- choose (0, bit n - 1)
     return (x,y,z)
 
-data4 :: Gen (Position, Char)
-data4 = do
-    p <- position4
-    v <- choose('a', 'd')
+rect :: Int -> Gen (Position, Position)
+rect n = do
+    p1 <- position n
+    p2 <- position n
+    return (p1,p2)
+
+values :: Int -> Int -> Gen (Position, Int)
+values n r = do
+    p <- position n
+    v <- choose(0, r)
     return (p, v)
 
 -- something gets inserted
@@ -61,14 +69,28 @@ prop_expandcollapse = forAll (vectorOf 2 leaves) $ \ls ->
 a @== b = sort a == sort b
 
 prop_identity :: Property
-prop_identity = forAll (listOf data4) $ \ds ->
+prop_identity = forAll (listOf (values 4 4)) $ \ds ->
     (toList . fromList 4 $ ds) @== (M.toList . M.fromList $ ds)
+
+area :: Position -> Position -> Int
+area (x,y,z) (x',y',z') =
+    (abs (x - x') + 1) * (abs (y - y') + 1) * (abs (z - z') + 1)
+
+prop_sum :: Property
+prop_sum = forAll (rect 8) $ \(p1, p2) ->
+    let ot = fill p1 p2 1 (Leaf 8 0)
+    in
+        sum [lookupDefault 0 (x,y,z) ot | let r = [0..255], x <- r, y <- r, z <- r] == area p1 p2
 
 main :: IO ()
 main = do
+    gen <- getStdGen
     let lots = stdArgs { maxSuccess = 10000 }
+        replay = stdArgs { replay = Just (gen, 123), maxSuccess = 10 }
+        few  = stdArgs { maxSuccess = 10 }
     quickCheck prop_insert_notempty
     quickCheck prop_insert_distinct
     quickCheckWith lots prop_collapse
     quickCheck prop_expandcollapse
     quickCheckWith lots prop_identity
+    quickCheckWith few prop_sum
