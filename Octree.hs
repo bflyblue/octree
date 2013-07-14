@@ -171,5 +171,10 @@ toDim = walk l'
     where l' (Leaf _ v) (x,y,z,h)   = [((x,y,z,h), v)]
           l' _   _                  = []
 
+values :: Eq a => Octree a -> [a]
+values = walk l'
+    where l' (Leaf _ v) (_,_,_,h)   = replicate ((bit h::Int)^(3::Int)) v
+          l' _   _                  = []
+
 fromList :: Eq a => Int -> [(Position, a)] -> Octree a
 fromList h = foldl' (\o (p,v) -> insert p v o) (empty h)

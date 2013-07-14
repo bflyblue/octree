@@ -29,8 +29,8 @@ rect n = do
     p2 <- position n
     return (p1,p2)
 
-values :: Int -> Int -> Gen (Position, Int)
-values n r = do
+values' :: Int -> Int -> Gen (Position, Int)
+values' n r = do
     p <- position n
     v <- choose(0, r)
     return (p, v)
@@ -69,7 +69,7 @@ prop_expandcollapse = forAll (vectorOf 2 leaves) $ \ls ->
 a @== b = sort a == sort b
 
 prop_identity :: Property
-prop_identity = forAll (listOf (values 4 4)) $ \ds ->
+prop_identity = forAll (listOf (values' 4 4)) $ \ds ->
     (toList . fromList 4 $ ds) @== (M.toList . M.fromList $ ds)
 
 area :: Position -> Position -> Int
@@ -80,17 +80,18 @@ prop_sum :: Property
 prop_sum = forAll (rect 8) $ \(p1, p2) ->
     let ot = fill p1 p2 1 (Leaf 8 0)
     in
-        sum [lookupDefault 0 (x,y,z) ot | let r = [0..255], x <- r, y <- r, z <- r] == area p1 p2
+        -- sum [lookupDefault 0 (x,y,z) ot | let r = [0..255], x <- r, y <- r, z <- r] == area p1 p2
+        sum (values ot) == area p1 p2
 
 main :: IO ()
 main = do
-    gen <- getStdGen
+    let gen = mkStdGen 1
     let lots = stdArgs { maxSuccess = 10000 }
-        replay = stdArgs { replay = Just (gen, 123), maxSuccess = 10 }
+        replay = stdArgs { replay = Just (gen, 123), maxSuccess = 5 }
         few  = stdArgs { maxSuccess = 10 }
-    quickCheck prop_insert_notempty
-    quickCheck prop_insert_distinct
-    quickCheckWith lots prop_collapse
-    quickCheck prop_expandcollapse
-    quickCheckWith lots prop_identity
-    quickCheckWith few prop_sum
+    -- quickCheck prop_insert_notempty
+    -- quickCheck prop_insert_distinct
+    -- quickCheckWith lots prop_collapse
+    -- quickCheck prop_expandcollapse
+    -- quickCheckWith lots prop_identity
+    quickCheckWith replay prop_sum
