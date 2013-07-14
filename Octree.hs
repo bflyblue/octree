@@ -28,7 +28,7 @@ data Octree a   = Node  { height                    :: !Int
                 deriving (Eq, Show)
 
 type Position   = (Int, Int, Int)
-type Dimensions = (Int, Int, Int, Int, Int, Int)
+type Dimensions = (Int, Int, Int, Int)
 
 step :: Int -> Position -> Maybe Octant
 step 0 _                                            = Nothing
@@ -45,6 +45,22 @@ step h (x, y, z)                                    = Just $ case label of 0 -> 
         label                                       = bit' x 4 .|. bit' y 2 .|. bit' z 1
         bit' a b                                    = if testBit a h' then b else 0 :: Int
         h'                                          = h - 1
+
+subdivide :: Dimensions -> Octant -> Dimensions
+subdivide (x, y, z, h) octant =
+    let h' = h - 1
+        xm = x .|. bit h'
+        ym = y .|. bit h'
+        zm = z .|. bit h'
+    in
+        case octant of O0 -> (x , y , z , h')
+                       O1 -> (x , y , zm, h')
+                       O2 -> (x , ym, z , h')
+                       O3 -> (x , ym, zm, h')
+                       O4 -> (xm, y , z , h')
+                       O5 -> (xm, y , zm, h')
+                       O6 -> (xm, ym, z , h')
+                       O7 -> (xm, ym, zm, h')
 
 expand :: Octree a -> Octree a
 expand (Empty h)                                    = Node h e e e e e e e e where e = Empty (h - 1)
@@ -100,31 +116,17 @@ delete :: Eq a => Position -> Octree a -> Octree a
 delete pos = set pos (Empty 0)
 
 walk :: Eq a => (Octree a -> Dimensions -> [b]) -> Octree a -> [b]
-walk f octree = walk' (0,0,0,d,d,d) f octree
-    where
-        d = bit (height octree)
+walk f octree = walk' (0, 0, 0, height octree) f octree
 
 walk' :: Eq a => Dimensions -> (Octree a -> Dimensions -> [b]) -> Octree a -> [b]
 walk' dim f octree =
     case octree of
         Empty{} -> f octree dim
         Leaf{}  -> f octree dim
-        Node h n0 n1 n2 n3 n4 n5 n6 n7 ->
-            let hd                      = bit (h - 1)
-                (x, y, z, x', y', z')   = dim
-                (xm, ym, zm)            = (x+hd, y+hd, z+hd)
-            in
-                f octree dim ++
-                    w (x , y , z , xm, ym, zm) n0 ++
-                    w (x , y , zm, xm, ym, z') n1 ++
-                    w (x , ym, z , xm, y', zm) n2 ++
-                    w (x , ym, zm, xm, y', z') n3 ++
-                    w (xm, y , z , x', ym, zm) n4 ++
-                    w (xm, y , zm, x', ym, z') n5 ++
-                    w (xm, ym, z , x', y', zm) n6 ++
-                    w (xm, ym, zm, x', y', z') n7
+        Node _ n0 n1 n2 n3 n4 n5 n6 n7 ->
+            f octree dim ++ w O0 n0 ++ w O1 n1 ++ w O2 n2 ++ w O3 n3 ++ w O4 n4 ++ w O5 n5 ++ w O6 n6 ++ w O7 n7
     where
-        w d     = walk' d f
+        w o     = walk' (subdivide dim o) f
 
 -- toList :: Octree a -> [a]
 -- toList Empty = []
@@ -132,5 +134,5 @@ walk' dim f octree =
 -- toList (Node (Octants a b c d e f g h)) = concatMap toList [a,b,c,d,e,f,g,h]
 toList :: (Eq a) => Octree a -> [(Position, a)]
 toList = walk l'
-    where l' (Leaf _ v) (x,y,z,x',y',z')    = [((i,j,k), v) | i <- [x..(x'-1)], j <- [y..(y'-1)], k <- [z..(z'-1)]]
-          l' _   _                          = []
+    where l' (Leaf _ v) (x,y,z,h)   = [((x+i, y+j, z+k), v) | let r = [0..(bit h - 1)], i <- r, j <- r, k <- r]
+          l' _   _                  = []
