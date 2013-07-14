@@ -28,6 +28,7 @@ data Octree a   = Node  { height                    :: !Int
                 deriving (Eq, Show)
 
 type Position   = (Int, Int, Int)
+type Dimensions = (Int, Int, Int, Int, Int, Int)
 
 step :: Int -> Position -> Maybe Octant
 step 0 _                                            = Nothing
@@ -98,7 +99,38 @@ insert pos val = set pos (Leaf 0 val)
 delete :: Eq a => Position -> Octree a -> Octree a
 delete pos = set pos (Empty 0)
 
+walk :: Eq a => (Octree a -> Dimensions -> [b]) -> Octree a -> [b]
+walk f octree = walk' (0,0,0,d,d,d) f octree
+    where
+        d = bit (height octree)
+
+walk' :: Eq a => Dimensions -> (Octree a -> Dimensions -> [b]) -> Octree a -> [b]
+walk' dim f octree =
+    case octree of
+        Empty{} -> f octree dim
+        Leaf{}  -> f octree dim
+        Node h n0 n1 n2 n3 n4 n5 n6 n7 ->
+            let hd                      = bit (h - 1)
+                (x, y, z, x', y', z')   = dim
+                (xm, ym, zm)            = (x+hd, y+hd, z+hd)
+            in
+                f octree dim ++
+                    w (x , y , z , xm, ym, zm) n0 ++
+                    w (x , y , zm, xm, ym, z') n1 ++
+                    w (x , ym, z , xm, y', zm) n2 ++
+                    w (x , ym, zm, xm, y', z') n3 ++
+                    w (xm, y , z , x', ym, zm) n4 ++
+                    w (xm, y , zm, x', ym, z') n5 ++
+                    w (xm, ym, z , x', y', zm) n6 ++
+                    w (xm, ym, zm, x', y', z') n7
+    where
+        w d     = walk' d f
+
 -- toList :: Octree a -> [a]
 -- toList Empty = []
 -- toList (Leaf a) = [a]
 -- toList (Node (Octants a b c d e f g h)) = concatMap toList [a,b,c,d,e,f,g,h]
+toList :: (Eq a) => Octree a -> [(Position, a)]
+toList = walk l'
+    where l' (Leaf _ v) (x,y,z,x',y',z')    = [((i,j,k), v) | i <- [x..(x'-1)], j <- [y..(y'-1)], k <- [z..(z'-1)]]
+          l' _   _                          = []
