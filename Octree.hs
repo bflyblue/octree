@@ -16,12 +16,15 @@ import Data.Bits
 data Octant     = O0 | O1 | O2 | O3 | O4 | O5 | O6 | O7
                 deriving (Eq, Ord, Enum, Show)
 
-data OctNode a  = Node  { oct0, oct1, oct2, oct3, oct4, oct5, oct6, oct7 :: !(Octree a) }
-                | Leaf  !a
-                | Empty
-                deriving (Eq, Show)
-
-data Octree a   = Octree !Int (OctNode a)
+data Octree a   = Node  { height                    :: !Int
+                        , oct0, oct1, oct2, oct3
+                        , oct4, oct5, oct6, oct7    :: !(Octree a)
+                        }
+                | Leaf  { height                    :: !Int
+                        , leaf                      :: !a
+                        }
+                | Empty { height                    :: !Int
+                        }
                 deriving (Eq, Show)
 
 type Position   = (Int, Int, Int)
@@ -36,29 +39,26 @@ step h (x, y, z)                                    = Just $ case label of 0 -> 
                                                                            5 -> O5
                                                                            6 -> O6
                                                                            7 -> O7
+                                                                           _ -> error "label out of range"
     where
         label                                       = bit' x 4 .|. bit' y 2 .|. bit' z 1
         bit' a b                                    = if testBit a h' then b else 0 :: Int
         h'                                          = h - 1
 
 expand :: Octree a -> Octree a
-expand (Octree h node)                              = Octree h $ case node of
-                                                                     Empty  -> e Empty
-                                                                     Leaf v -> e (Leaf v)
-                                                                     _      -> node
-    where
-        e n                                         = Node o o o o o o o o
-            where
-                o                                   = Octree (h - 1) n
+expand (Empty h)                                    = Node h e e e e e e e e where e = Empty (h - 1)
+expand (Leaf h v)                                   = Node h l l l l l l l l where l = Leaf (h - 1) v
+expand octree                                       = octree
 
 collapse :: Eq a => Octree a -> Octree a
-collapse (Octree h (Node o0 o1 o2 o3 o4 o5 o6 o7))
-    | all (==o0) [o1,o2,o3,o4,o5,o6,o7]             = let (Octree _ node) = o0 in Octree h node
+collapse (Node h o0 o1 o2 o3 o4 o5 o6 o7)
+    | all (==o0) [o1,o2,o3,o4,o5,o6,o7]             = case o0 of Leaf _ v                       -> Leaf h v
+                                                                 Empty _                        -> Empty h
+                                                                 Node _ n1 n2 n3 n4 n5 n6 n7 n8 -> Node h n1 n2 n3 n4 n5 n6 n7 n8
 collapse octree                                     = octree
 
 lookup :: Eq a => Position -> Octree a -> Octree a
-lookup pos octree@(Octree h (Node o0 o1 o2 o3 o4 o5 o6 o7))
-                                                    = case step h pos of Nothing -> octree
+lookup pos octree@(Node h o0 o1 o2 o3 o4 o5 o6 o7)  = case step h pos of Nothing -> octree
                                                                          Just O0 -> l o0
                                                                          Just O1 -> l o1
                                                                          Just O2 -> l o2
@@ -68,32 +68,35 @@ lookup pos octree@(Octree h (Node o0 o1 o2 o3 o4 o5 o6 o7))
                                                                          Just O6 -> l o6
                                                                          Just O7 -> l o7
     where l                                         = lookup pos
+lookup _   octree                                   = octree
 
 modify :: Eq a => (Octree a -> Octree a) -> Position -> Octree a -> Octree a
 modify f pos                                        = collapse . modify' . expand
     where
-        modify' octree@(Octree h node@Node{})       = case step h pos of Nothing -> f octree
-                                                                         Just O0 -> m oct0 (\o x->o {oct0=x})
-                                                                         Just O1 -> m oct1 (\o x->o {oct1=x})
-                                                                         Just O2 -> m oct2 (\o x->o {oct2=x})
-                                                                         Just O3 -> m oct3 (\o x->o {oct3=x})
-                                                                         Just O4 -> m oct4 (\o x->o {oct4=x})
-                                                                         Just O5 -> m oct5 (\o x->o {oct5=x})
-                                                                         Just O6 -> m oct6 (\o x->o {oct6=x})
-                                                                         Just O7 -> m oct7 (\o x->o {oct7=x})
-            where m g s                             = Octree h . s node . modify f pos . g $ node
+        modify' octree@(Node h o0 o1 o2 o3 o4 o5 o6 o7)
+                                                    = case step h pos of Nothing -> f octree
+                                                                         Just O0 -> m o0 (\o x->o {oct0=x})
+                                                                         Just O1 -> m o1 (\o x->o {oct1=x})
+                                                                         Just O2 -> m o2 (\o x->o {oct2=x})
+                                                                         Just O3 -> m o3 (\o x->o {oct3=x})
+                                                                         Just O4 -> m o4 (\o x->o {oct4=x})
+                                                                         Just O5 -> m o5 (\o x->o {oct5=x})
+                                                                         Just O6 -> m o6 (\o x->o {oct6=x})
+                                                                         Just O7 -> m o7 (\o x->o {oct7=x})
+            where m n s                             = s octree . modify f pos $ n
+        modify' _                                   = error "expand did not return a Node"
 
 empty :: Int -> Octree a
-empty h = Octree h Empty
+empty = Empty
 
 set :: Eq a => Position -> Octree a -> Octree a -> Octree a
 set pos octree = modify (const octree) pos
 
 insert :: Eq a => Position -> a -> Octree a -> Octree a
-insert pos val = set pos (Octree 0 (Leaf val))
+insert pos val = set pos (Leaf 0 val)
 
 delete :: Eq a => Position -> Octree a -> Octree a
-delete pos = set pos (Octree 0 Empty)
+delete pos = set pos (Empty 0)
 
 -- toList :: Octree a -> [a]
 -- toList Empty = []
