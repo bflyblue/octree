@@ -72,28 +72,28 @@ prop_identity :: Property
 prop_identity = forAll (listOf (values' 4 4)) $ \ds ->
     (toList . fromList 4 $ ds) @== (M.toList . M.fromList $ ds)
 
-area :: Position -> Position -> Int
-area (x,y,z) (x',y',z') =
+volume :: Position -> Position -> Int
+volume (x,y,z) (x',y',z') =
     (abs (x - x') + 1) * (abs (y - y') + 1) * (abs (z - z') + 1)
 
 prop_sum :: Property
 prop_sum = forAll (rect 8) $ \(p1, p2) ->
     let ot = fill p1 p2 1 (Leaf 8 0)
     in
-        sum [lookupDefault 0 (x,y,z) ot | let r = [0..255], x <- r, y <- r, z <- r] == area p1 p2
+        sum [lookupDefault 0 (x,y,z) ot | let r = [0..255], x <- r, y <- r, z <- r] == volume p1 p2
 
 prop_folddim :: Property
 prop_folddim = forAll (rect 8) $ \(p1, p2) ->
     let ot = fill p1 p2 1 (Leaf 8 0)
     in
-        -- sum [lookupDefault 0 (x,y,z) ot | let r = [0..255], x <- r, y <- r, z <- r] == area p1 p2
-        foldl' (\z ((_,_,_,h),v) -> z + v * ((bit h)^3)) 0 (toDim ot) == area p1 p2
+        -- sum [lookupDefault 0 (x,y,z) ot | let r = [0..255], x <- r, y <- r, z <- r] == volume p1 p2
+        foldl' (\z ((_,_,_,h),v) -> z + v * ((bit h)^3)) 0 (toDim ot) == volume p1 p2
 
 main :: IO ()
 main = do
     let gen = mkStdGen 1
     let lots = stdArgs { maxSuccess = 10000 }
-        replay = stdArgs { replay = Just (gen, 123), maxSuccess = 100 }
+        replay = stdArgs { replay = Just (gen, 123), maxSuccess = 10 }
         few  = stdArgs { maxSuccess = 10 }
     quickCheck prop_insert_notempty
     quickCheck prop_insert_distinct
